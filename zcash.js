@@ -125,17 +125,57 @@ export function buildSignedTx({ wif, utxos, to, amount }) {
   return { hex: bytesToHex(tx), fee, change };
 }
 
+const HEADERS = { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (Android) ZecHamyon/1.0' };
+const BLOCKBOOKS = ['https://zec1.trezor.io', 'https://zec2.trezor.io'];
+const BLOCKCHAIR = 'https://api.blockchair.com/zcash';
+// Ixtiyoriy: blockchair.com/api/plans dan bepul kalit olsangiz, shu yerga qo'ying
+const BLOCKCHAIR_KEY = '';
+const bk = (u) => (BLOCKCHAIR_KEY ? u + (u.includes('?') ? '&' : '?') + 'key=' + BLOCKCHAIR_KEY : u);
+
 export async function getUtxos(address) {
-  const r = await fetch(`${API}/api/v2/utxo/${address}`);
-  if (!r.ok) throw new Error('UTXO olinmadi (' + r.status + ')');
-  return r.json();
+  const errs = [];
+  // 1) Blockchair
+  try {
+    const r = await fetch(bk(`${BLOCKCHAIR}/dashboards/address/${address}?limit=0,100`), { headers: HEADERS });
+    if (!r.ok) throw new Error('Blockchair ' + r.status);
+    const j = await r.json();
+    const d = j && j.data && j.data[address];
+    if (!d) throw new Error('Blockchair: ma’lumot yo‘q');
+    return (d.utxo || []).map((u) => ({ txid: u.transaction_hash, vout: u.index, value: String(u.value) }));
+  } catch (e) { errs.push(e.message); }
+  // 2) Blockbook
+  for (const base of BLOCKBOOKS) {
+    try {
+      const r = await fetch(`${base}/api/v2/utxo/${address}`, { headers: HEADERS });
+      if (!r.ok) throw new Error(base + ' ' + r.status);
+      return (await r.json()).map((u) => ({ txid: u.txid, vout: u.vout, value: String(u.value) }));
+    } catch (e) { errs.push(e.message); }
+  }
+  throw new Error('UTXO olinmadi: ' + errs.join(' | '));
 }
 
 export async function broadcast(hex) {
-  const r = await fetch(`${API}/api/v2/sendtx/`, { method: 'POST', body: hex });
-  const j = await r.json();
-  if (!j.result) throw new Error(j.error || 'Yuborilmadi');
-  return j.result; // txid
+  const errs = [];
+  try {
+    const r = await fetch(bk(`${BLOCKCHAIR}/push/transaction`), {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + hex,
+    });
+    const j = await r.json();
+    const id = j && j.data && j.data.transaction_hash;
+    if (id) return id;
+    errs.push('Blockchair: ' + ((j && j.context && j.context.error) || r.status));
+  } catch (e) { errs.push(e.message); }
+  for (const base of BLOCKBOOKS) {
+    try {
+      const r = await fetch(`${base}/api/v2/sendtx/`, { method: 'POST', headers: HEADERS, body: hex });
+      const j = await r.json();
+      if (j.result) return j.result;
+      errs.push(j.error || base + ' ' + r.status);
+    } catch (e) { errs.push(e.message); }
+  }
+  throw new Error('Yuborilmadi: ' + errs.join(' | '));
 }
 
 export const zecToZat = (s) => {
