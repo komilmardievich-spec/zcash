@@ -1,14 +1,15 @@
 {
-  "name": "zcash-wallet",
-  "version": "1.0.0",
-  "main": "expo/AppEntry.js",
-  "dependencies": {
-    "@noble/curves": "1.4.0",
-    "@noble/hashes": "1.4.0",
-    "expo": "~52.0.46",
-    "expo-clipboard": "~7.0.1",
-    "expo-secure-store": "~14.0.1",
-    "react": "18.3.1",
-    "react-native": "0.76.9"
-  }
+"name": "zcash-wallet",
+"version": "1.0.0",
+"main": "expo/AppEntry.js",
+"dependencies": {
+"@noble/curves": "1.4.0",
+"@noble/hashes": "1.4.0",
+"expo": "~52.0.46",
+"expo-asset": "~11.0.5",
+"expo-clipboard": "~7.0.1",
+"expo-secure-store": "~14.0.1",
+"react": "18.3.1",
+"react-native": "0.76.9"
+}
 }
